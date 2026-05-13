@@ -2,6 +2,7 @@ Metadata-Version: 2.4
 Name: FLIPKART-RECOMMENDER
 Version: 0.1
 Author: Sai Kishan
+License-File: LICENSE
 Requires-Dist: langchain
 Requires-Dist: langchain-astradb
 Requires-Dist: langchain-huggingface
@@ -14,4 +15,5 @@ Requires-Dist: pandas
 Requires-Dist: flask
 Requires-Dist: prometheus_client
 Dynamic: author
+Dynamic: license-file
 Dynamic: requires-dist
