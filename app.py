@@ -1,43 +1,135 @@
-from flask import render_template,Flask,request,Response
-from prometheus_client import Counter,generate_latest
+from flask import Flask, render_template, request, Response, jsonify
+from prometheus_client import Counter, generate_latest
 from flipkart.data_ingestion import DataIngestor
 from flipkart.rag_chain import RAGChainBuilder
-
 from dotenv import load_dotenv
+import logging
+import os
+
+# Load environment variables
 load_dotenv()
 
-REQUEST_COUNT = Counter("http_requests_total" , "Total HTTP Request")
+# Logging setup
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Prometheus Metrics
+REQUEST_COUNT = Counter(
+    "http_requests_total",
+    "Total HTTP Requests"
+)
+
+# Global RAG chain
+rag_chain = None
+
+
+def get_rag_chain():
+    """
+    Lazy load the RAG chain.
+    Prevents Vercel startup crashes.
+    """
+    global rag_chain
+
+    if rag_chain is None:
+        logger.info("Initializing vector store...")
+
+        vector_store = DataIngestor().ingest(
+            load_existing=True
+        )
+
+        logger.info("Building RAG chain...")
+
+        rag_chain = RAGChainBuilder(
+            vector_store
+        ).build_chain()
+
+        logger.info("RAG chain initialized successfully!")
+
+    return rag_chain
+
 
 def create_app():
 
     app = Flask(__name__)
 
-    vector_store = DataIngestor().ingest(load_existing=True)
-    rag_chain = RAGChainBuilder(vector_store).build_chain()
-
     @app.route("/")
     def index():
         REQUEST_COUNT.inc()
         return render_template("index.html")
-    
-    @app.route("/get" , methods=["POST"])
+
+    @app.route("/health")
+    def health():
+        return jsonify({
+            "status": "healthy"
+        }), 200
+
+    @app.route("/get", methods=["POST"])
     def get_response():
 
-        user_input = request.form["msg"]
+        REQUEST_COUNT.inc()
 
-        reponse = rag_chain.invoke(
-            {"input" : user_input},
-            config={"configurable" : {"session_id" : "user-session"}}
-        )["answer"]
+        try:
+            user_input = request.form.get("msg", "").strip()
 
-        return reponse
-    
+            if not user_input:
+                return jsonify({
+                    "error": "Input cannot be empty"
+                }), 400
+
+            logger.info(f"User Input: {user_input}")
+
+            # Load chain lazily
+            chain = get_rag_chain()
+
+            response = chain.invoke(
+                {"input": user_input},
+                config={
+                    "configurable": {
+                        "session_id": "user-session"
+                    }
+                }
+            )
+
+            # Extract answer safely
+            if isinstance(response, dict):
+                answer = response.get("answer", str(response))
+            else:
+                answer = str(response)
+
+            logger.info(f"Bot Response: {answer}")
+
+            return answer
+
+        except Exception as e:
+            logger.exception("Error generating response")
+
+            return jsonify({
+                "error": str(e)
+            }), 500
+
     @app.route("/metrics")
     def metrics():
-        return Response(generate_latest(), mimetype="text/plain")
-    
+        REQUEST_COUNT.inc()
+
+        return Response(
+            generate_latest(),
+            mimetype="text/plain"
+        )
+
     return app
 
-if __name__=="__main__":
-    app = create_app()
-    app.run(host="0.0.0.0",port=5000,debug=True)
+
+# IMPORTANT FOR VERCEL
+app = create_app()
+
+
+# Local development
+if __name__ == "__main__":
+
+    port = int(os.environ.get("PORT", 5000))
+
+    app.run(
+        host="0.0.0.0",
+        port=port,
+        debug=True
+    )
