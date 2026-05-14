@@ -102,6 +102,22 @@
                 return text.replace(/[&<>"']/g, m => map[m]);
             }
 
+            function formatResponse(text) {
+                // Convert **text** to <strong>text</strong>
+                text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                
+                // Convert *text* to <em>text</em>
+                text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+                
+                // Convert numbered lists (1. 2. 3.) to proper list items
+                text = text.replace(/^\d+\.\s+/gm, '• ');
+                
+                // Convert line breaks to <br> tags
+                text = text.replace(/\n/g, '<br>');
+                
+                return text;
+            }
+
             $("#messageForm").on("submit", function(event) {
                 event.preventDefault();
                 
@@ -167,6 +183,9 @@
                     // Remove loading indicator
                     $("#messageContainer").find(".typing-indicator").closest(".message-group").remove();
 
+                    // Format the response with proper HTML markup
+                    const formattedResponse = formatResponse(escapeHtml(data));
+
                     // Bot Message
                     const botMessageHTML = `
                         <div class="message-group">
@@ -174,7 +193,7 @@
                                 <img src="{{ url_for('static', filename='priya_logo.png') }}" alt="Priya" class="avatar-img">
                             </div>
                             <div class="message bot-message">
-                                <div class="bot-response">${data}</div>
+                                <div class="bot-response">${formattedResponse}</div>
                                 <span class="message-time">${timeString}</span>
                             </div>
                         </div>
