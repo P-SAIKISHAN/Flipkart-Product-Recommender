@@ -13,6 +13,19 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Diagnostics report
+try:
+    with open("diagnostics.log", "w") as f:
+        f.write("--- ENVIRONMENT VARIABLES DIAGNOSTICS ---\n")
+        f.write(f"GROQ_API_KEY: {'LOADED' if os.getenv('GROQ_API_KEY') else 'MISSING'}\n")
+        f.write(f"ASTRA_DB_API_ENDPOINT: {'LOADED' if os.getenv('ASTRA_DB_API_ENDPOINT') else 'MISSING'}\n")
+        f.write(f"ASTRA_DB_APPLICATION_TOKEN: {'LOADED' if os.getenv('ASTRA_DB_APPLICATION_TOKEN') else 'MISSING'}\n")
+        f.write(f"ASTRA_DB_KEYSPACE: {os.getenv('ASTRA_DB_KEYSPACE') or 'MISSING'}\n")
+        f.write(f"HF_TOKEN: {'LOADED' if os.getenv('HF_TOKEN') else 'MISSING'}\n")
+        f.write(f"HUGGINGFACEHUB_API_TOKEN: {'LOADED' if os.getenv('HUGGINGFACEHUB_API_TOKEN') else 'MISSING'}\n")
+except Exception as log_err:
+    pass
+
 # Prometheus Metrics
 REQUEST_COUNT = Counter(
     "http_requests_total",
@@ -102,6 +115,12 @@ def create_app():
 
         except Exception as e:
             logger.exception("Error generating response")
+            import traceback
+            try:
+                with open("error.log", "w") as f:
+                    traceback.print_exc(file=f)
+            except Exception as log_err:
+                pass
 
             return jsonify({
                 "error": str(e)
