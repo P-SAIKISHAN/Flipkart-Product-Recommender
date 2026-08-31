@@ -68,6 +68,14 @@ class RAGChainBuilder:
         
         return response_text.strip()
     
+    def _retrieve_with_timing(self, x, history_aware_retriever):
+        import time
+        start_time = time.perf_counter()
+        docs = history_aware_retriever.invoke(x)
+        elapsed_time = (time.perf_counter() - start_time) * 1000
+        logger.info(f"=== VECTOR SEARCH RETRIEVAL LATENCY: {elapsed_time:.2f} ms ===")
+        return docs
+
     def build_chain(self):
         """Build the complete RAG chain with message history and structured responses"""
         retriever = self.vector_store.as_retriever(search_kwargs={"k": 3})
@@ -120,9 +128,10 @@ USER QUESTION:
         # Build the complete RAG chain with proper document formatting
         rag_chain = (
             RunnablePassthrough.assign(
-                context=lambda x: self._format_docs(
-                    history_aware_retriever.invoke(x)
-                )
+                context=lambda x: self._retrieve_with_timing(x, history_aware_retriever)
+            )
+            | RunnablePassthrough.assign(
+                context=lambda x: self._format_docs(x["context"])
             )
             | question_answer_chain
             | RunnableLambda(self._format_response)
